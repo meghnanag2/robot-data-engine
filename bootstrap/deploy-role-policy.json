@@ -7,30 +7,53 @@
       "Action": [
         "sts:GetCallerIdentity",
         "s3:ListAllMyBuckets",
-        "lambda:List*", "lambda:Get*",
+        "lambda:List*",
+        "lambda:Get*",
         "glue:Get*",
-        "athena:Get*", "athena:List*",
-        "states:Describe*", "states:List*",
-        "scheduler:Get*", "scheduler:List*",
-        "iam:Get*", "iam:List*",
-        "logs:Describe*", "logs:List*",
-        "cloudwatch:Describe*", "cloudwatch:List*",
-        "sns:Get*", "sns:List*",
-        "budgets:View*", "budgets:Describe*"
+        "athena:Get*",
+        "athena:List*",
+        "states:Describe*",
+        "states:List*",
+        "scheduler:Get*",
+        "scheduler:List*",
+        "iam:Get*",
+        "iam:List*",
+        "logs:Describe*",
+        "logs:List*",
+        "cloudwatch:Describe*",
+        "cloudwatch:List*",
+        "sns:Get*",
+        "sns:List*",
+        "budgets:View*",
+        "budgets:Describe*",
+        "states:ValidateStateMachineDefinition"
       ],
       "Resource": "*"
     },
     {
       "Sid": "TerraformState",
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
-      "Resource": ["arn:aws:s3:::rde-tfstate-ACCOUNT_ID", "arn:aws:s3:::rde-tfstate-ACCOUNT_ID/*"]
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::rde-tfstate-ACCOUNT_ID",
+        "arn:aws:s3:::rde-tfstate-ACCOUNT_ID/*"
+      ]
     },
     {
       "Sid": "ProjectBuckets",
       "Effect": "Allow",
       "Action": "s3:*",
-      "Resource": ["arn:aws:s3:::rde-dev-*", "arn:aws:s3:::rde-dev-*/*", "arn:aws:s3:::rde-prod-*", "arn:aws:s3:::rde-prod-*/*"]
+      "Resource": [
+        "arn:aws:s3:::rde-dev-*",
+        "arn:aws:s3:::rde-dev-*/*",
+        "arn:aws:s3:::rde-prod-*",
+        "arn:aws:s3:::rde-prod-*/*"
+      ]
     },
     {
       "Sid": "ProjectLambdas",
@@ -56,7 +79,11 @@
     {
       "Sid": "ProjectAthenaStatesScheduler",
       "Effect": "Allow",
-      "Action": ["athena:*", "states:*", "scheduler:*"],
+      "Action": [
+        "athena:*",
+        "states:*",
+        "scheduler:*"
+      ],
       "Resource": [
         "arn:aws:athena:*:ACCOUNT_ID:workgroup/rde-*",
         "arn:aws:states:*:ACCOUNT_ID:stateMachine:rde-*",
@@ -68,15 +95,27 @@
       "Sid": "ProjectRoles",
       "Effect": "Allow",
       "Action": [
-        "iam:CreateRole", "iam:DeleteRole", "iam:UpdateRole", "iam:UpdateAssumeRolePolicy",
-        "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:TagRole", "iam:UntagRole", "iam:PassRole"
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:UpdateRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:PassRole"
       ],
       "Resource": "arn:aws:iam::ACCOUNT_ID:role/rde-*"
     },
     {
       "Sid": "ProjectMonitoring",
       "Effect": "Allow",
-      "Action": ["logs:*", "cloudwatch:*", "sns:*", "budgets:*"],
+      "Action": [
+        "logs:*",
+        "cloudwatch:*",
+        "sns:*",
+        "budgets:*"
+      ],
       "Resource": [
         "arn:aws:logs:*:ACCOUNT_ID:log-group:/aws/lambda/rde-*",
         "arn:aws:logs:*:ACCOUNT_ID:log-group:/aws/lambda/rde-*:*",
@@ -88,8 +127,16 @@
     {
       "Sid": "SmokeTestQueries",
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:GetBucketLocation"],
-      "Resource": ["arn:aws:s3:::rde-*", "arn:aws:s3:::rde-*/*"]
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": [
+        "arn:aws:s3:::rde-*",
+        "arn:aws:s3:::rde-*/*"
+      ]
     }
   ]
 }
