@@ -1,0 +1,95 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadOnlyDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity",
+        "s3:ListAllMyBuckets",
+        "lambda:List*", "lambda:Get*",
+        "glue:Get*",
+        "athena:Get*", "athena:List*",
+        "states:Describe*", "states:List*",
+        "scheduler:Get*", "scheduler:List*",
+        "iam:Get*", "iam:List*",
+        "logs:Describe*", "logs:List*",
+        "cloudwatch:Describe*", "cloudwatch:List*",
+        "sns:Get*", "sns:List*",
+        "budgets:View*", "budgets:Describe*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "TerraformState",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
+      "Resource": ["arn:aws:s3:::rde-tfstate-ACCOUNT_ID", "arn:aws:s3:::rde-tfstate-ACCOUNT_ID/*"]
+    },
+    {
+      "Sid": "ProjectBuckets",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": ["arn:aws:s3:::rde-dev-*", "arn:aws:s3:::rde-dev-*/*", "arn:aws:s3:::rde-prod-*", "arn:aws:s3:::rde-prod-*/*"]
+    },
+    {
+      "Sid": "ProjectLambdas",
+      "Effect": "Allow",
+      "Action": "lambda:*",
+      "Resource": [
+        "arn:aws:lambda:*:ACCOUNT_ID:function:rde-*",
+        "arn:aws:lambda:*:ACCOUNT_ID:layer:rde-*",
+        "arn:aws:lambda:*:ACCOUNT_ID:layer:rde-*:*"
+      ]
+    },
+    {
+      "Sid": "ProjectGlue",
+      "Effect": "Allow",
+      "Action": "glue:*",
+      "Resource": [
+        "arn:aws:glue:*:ACCOUNT_ID:catalog",
+        "arn:aws:glue:*:ACCOUNT_ID:database/rde_*",
+        "arn:aws:glue:*:ACCOUNT_ID:table/rde_*/*",
+        "arn:aws:glue:*:ACCOUNT_ID:job/rde-*"
+      ]
+    },
+    {
+      "Sid": "ProjectAthenaStatesScheduler",
+      "Effect": "Allow",
+      "Action": ["athena:*", "states:*", "scheduler:*"],
+      "Resource": [
+        "arn:aws:athena:*:ACCOUNT_ID:workgroup/rde-*",
+        "arn:aws:states:*:ACCOUNT_ID:stateMachine:rde-*",
+        "arn:aws:states:*:ACCOUNT_ID:execution:rde-*:*",
+        "arn:aws:scheduler:*:ACCOUNT_ID:schedule/default/rde-*"
+      ]
+    },
+    {
+      "Sid": "ProjectRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole", "iam:DeleteRole", "iam:UpdateRole", "iam:UpdateAssumeRolePolicy",
+        "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:TagRole", "iam:UntagRole", "iam:PassRole"
+      ],
+      "Resource": "arn:aws:iam::ACCOUNT_ID:role/rde-*"
+    },
+    {
+      "Sid": "ProjectMonitoring",
+      "Effect": "Allow",
+      "Action": ["logs:*", "cloudwatch:*", "sns:*", "budgets:*"],
+      "Resource": [
+        "arn:aws:logs:*:ACCOUNT_ID:log-group:/aws/lambda/rde-*",
+        "arn:aws:logs:*:ACCOUNT_ID:log-group:/aws/lambda/rde-*:*",
+        "arn:aws:cloudwatch:*:ACCOUNT_ID:alarm:rde-*",
+        "arn:aws:sns:*:ACCOUNT_ID:rde-*",
+        "arn:aws:budgets::ACCOUNT_ID:budget/rde-*"
+      ]
+    },
+    {
+      "Sid": "SmokeTestQueries",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:GetBucketLocation"],
+      "Resource": ["arn:aws:s3:::rde-*", "arn:aws:s3:::rde-*/*"]
+    }
+  ]
+}

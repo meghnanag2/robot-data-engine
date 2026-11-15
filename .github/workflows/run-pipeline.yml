@@ -1,0 +1,38 @@
+# Start a pipeline run without opening the AWS console: a button in the Actions tab, plus nightly in dev.
+name: run-pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        type: choice
+        options: [dev, prod]
+        default: dev
+      dataset:
+        type: string
+        default: lerobot/pusht
+      max_videos:
+        type: number
+        default: 1
+  schedule:
+    - cron: "43 11 * * *"   # nightly dev run, 11:43 UTC
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - run: |
+          ENV="${{ inputs.env || 'dev' }}"
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          ARN="arn:aws:states:${{ vars.AWS_REGION }}:${ACCOUNT}:stateMachine:rde-${ENV}-pipeline"
+          bash scripts/smoke_test.sh "$ARN" "${{ inputs.dataset || 'lerobot/pusht' }}" "${{ inputs.max_videos || 1 }}"

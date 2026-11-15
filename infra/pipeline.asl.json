@@ -1,0 +1,95 @@
+{
+  "Comment": "Robot data engine: ingest from Hugging Face, extract frames, clean into Iceberg",
+  "StartAt": "Ingest",
+  "States": {
+    "Ingest": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${ingest_arn}",
+        "Payload": {
+          "dataset.$": "$.dataset",
+          "max_videos.$": "$.max_videos",
+          "run_id.$": "$$.Execution.StartTime"
+        }
+      },
+      "ResultSelector": { "result.$": "$.Payload" },
+      "OutputPath": "$.result",
+      "Retry": [
+        { "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException", "States.Timeout"], "IntervalSeconds": 10, "MaxAttempts": 2, "BackoffRate": 2 }
+      ],
+      "Next": "ExtractFrames"
+    },
+    "ExtractFrames": {
+      "Type": "Map",
+      "ItemsPath": "$.video_keys",
+      "MaxConcurrency": 4,
+      "ItemSelector": {
+        "bucket.$": "$.bucket",
+        "dataset.$": "$.dataset",
+        "run_id.$": "$.run_id",
+        "video_key.$": "$$.Map.Item.Value"
+      },
+      "ItemProcessor": {
+        "ProcessorConfig": { "Mode": "INLINE" },
+        "StartAt": "Extract",
+        "States": {
+          "Extract": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": { "FunctionName": "${extract_arn}", "Payload.$": "$" },
+            "ResultSelector": { "result.$": "$.Payload" },
+            "OutputPath": "$.result",
+            "Retry": [
+              { "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException", "States.Timeout"], "IntervalSeconds": 10, "MaxAttempts": 2, "BackoffRate": 2 }
+            ],
+            "End": true
+          }
+        }
+      },
+      "ResultPath": "$.extract_results",
+      "Next": "Clean"
+    },
+    "Clean": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "${glue_job}",
+        "Arguments": {
+          "--RUN_ID.$": "$.run_id",
+          "--DATASET.$": "$.dataset"
+        }
+      },
+      "ResultSelector": { "glue_run_id.$": "$.Id", "state.$": "$.JobRunState" },
+      "ResultPath": "$.clean",
+      "Next": "QualityAgent"
+    },
+    "QualityAgent": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${agent_arn}",
+        "Payload": { "dataset.$": "$.dataset", "run_id.$": "$.run_id" }
+      },
+      "ResultSelector": { "result.$": "$.Payload" },
+      "ResultPath": "$.quality",
+      "Retry": [
+        { "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"], "IntervalSeconds": 10, "MaxAttempts": 2, "BackoffRate": 2 }
+      ],
+      "Next": "Verdict"
+    },
+    "Verdict": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.quality.result.verdict", "StringEquals": "fail", "Next": "QualityFailed" }
+      ],
+      "Default": "Done"
+    },
+    "QualityFailed": {
+      "Type": "Fail",
+      "Error": "DataQualityFailed",
+      "Cause": "The quality agent rejected this run. See the report in S3 and the email."
+    },
+    "Done": { "Type": "Succeed" }
+  }
+}
