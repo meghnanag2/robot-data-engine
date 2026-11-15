@@ -80,3 +80,12 @@ def test_frame_rules_and_episode_mapping(spark):
         "s3://e": "no_episode_match",
     }
     assert {(r.frame_s3, r.episode_index) for r in clean.collect()} == {("s3://a", 0), ("s3://f", 1)}
+
+
+def test_reads_lerobot_nested_layout(spark, tmp_path):
+    """LeRobot v3 stores data/chunk-000/file-000.parquet; the job must find nested files."""
+    nested = tmp_path / "data" / "chunk-000"
+    nested.mkdir(parents=True)
+    spark.createDataFrame([(1,), (2,)], "a long").coalesce(1).write.parquet(str(nested / "file-000"))
+    df = spark.read.option("recursiveFileLookup", "true").parquet(str(tmp_path / "data"))
+    assert df.count() == 2

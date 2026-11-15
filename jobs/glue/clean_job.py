@@ -20,15 +20,17 @@ def main() -> None:
     spark = SparkSession.builder.getOrCreate()
     writer = IcebergWriter(spark, args["DATABASE"], dataset, run_id)
     raw = f"s3://{bucket}/{paths.raw_prefix(dataset)}"
+    # LeRobot v3 nests files as <dir>/chunk-NNN/file-NNN.parquet; without this Spark finds no files
+    parquet = spark.read.option("recursiveFileLookup", "true")
 
     # 1. episode time-series
-    ep = clean_episodes(spark.read.parquet(f"{raw}data/"), rules)
+    ep = clean_episodes(parquet.parquet(f"{raw}data/"), rules)
     writer.write(ep.clean_frames, "episode_frames")
     writer.write(ep.episodes, "episodes")
 
     # 2. extracted frames
     frames = spark.read.json(f"s3://{bucket}/{paths.frame_meta_prefix(dataset, run_id)}")
-    ranges = episode_time_ranges(spark.read.parquet(f"{raw}meta/episodes/"))
+    ranges = episode_time_ranges(parquet.parquet(f"{raw}meta/episodes/"))
     clean, rejected = clean_frames(frames, ranges, rules)
     writer.write(clean, "video_frames")
 
