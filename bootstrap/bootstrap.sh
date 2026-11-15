@@ -5,7 +5,9 @@
 # Safe to re-run.
 set -euo pipefail
 
-REPO="${1:?usage: bootstrap.sh <github-owner>/<repo>}"
+REPO="${1:?usage: bootstrap.sh <owner>/<repo> [<owner>@<ownerId>/<repo>@<repoId>]}"
+# GitHub now puts immutable IDs in the OIDC subject; pass them as $2 (see CloudTrail AssumeRoleWithWebIdentity)
+SUBJECT="${2:-$REPO}"
 REGION="${AWS_REGION:-us-west-2}"
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 STATE_BUCKET="rde-tfstate-${ACCOUNT_ID}"
@@ -43,6 +45,10 @@ cat > /tmp/trust.json <<EOF
     "Condition": {
       "StringEquals": {"${OIDC_URL}:aud": "sts.amazonaws.com"},
       "StringLike": {"${OIDC_URL}:sub": [
+        "repo:${SUBJECT}:ref:refs/heads/main",
+        "repo:${SUBJECT}:environment:dev",
+        "repo:${SUBJECT}:environment:prod",
+        "repo:${SUBJECT}:pull_request",
         "repo:${REPO}:ref:refs/heads/main",
         "repo:${REPO}:environment:dev",
         "repo:${REPO}:environment:prod",

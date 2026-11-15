@@ -15,6 +15,10 @@ Parameters:
     - 'false'
     Default: 'true'
     Description: Set false if the account already has the GitHub OIDC provider
+  GitHubSubject:
+    Type: String
+    Default: meghnanag2@180262076/robot-data-engine@1459246001
+    Description: owner@ownerId/repo@repoId as GitHub puts it in the OIDC sub claim (immutable IDs; see CloudTrail AssumeRoleWithWebIdentity userName)
 Conditions:
   MakeOIDC:
     Fn::Equals:
@@ -57,8 +61,9 @@ Resources:
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Fn::Sub: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Federated": "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"}, "Action": "sts:AssumeRoleWithWebIdentity",
-          "Condition": {"StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"}, "StringLike": {"token.actions.githubusercontent.com:sub": ["repo:${GitHubRepo}:ref:refs/heads/main",
-          "repo:${GitHubRepo}:environment:dev", "repo:${GitHubRepo}:environment:prod", "repo:${GitHubRepo}:pull_request"]}}}]}'
+          "Condition": {"StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"}, "StringLike": {"token.actions.githubusercontent.com:sub": ["repo:${GitHubSubject}:ref:refs/heads/main",
+          "repo:${GitHubSubject}:environment:dev", "repo:${GitHubSubject}:environment:prod", "repo:${GitHubSubject}:pull_request", "repo:${GitHubRepo}:ref:refs/heads/main", "repo:${GitHubRepo}:environment:dev",
+          "repo:${GitHubRepo}:environment:prod", "repo:${GitHubRepo}:pull_request"]}}}]}'
       Policies:
       - PolicyName: rde-deploy
         PolicyDocument:
