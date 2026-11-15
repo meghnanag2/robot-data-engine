@@ -1,0 +1,92 @@
+# Deploy once (CloudShell):
+#   aws cloudformation deploy --stack-name rde-bootstrap --template-file bootstrap/bootstrap.cfn.yaml \
+#     --capabilities CAPABILITY_NAMED_IAM --parameter-overrides GitHubRepo=<owner>/<repo>
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'robot-data-engine bootstrap: Terraform state bucket, GitHub OIDC provider, scoped GitHub Actions deploy role'
+Parameters:
+  GitHubRepo:
+    Type: String
+    Description: owner/repo allowed to deploy
+    Default: meghnanag2/robot-data-engine
+  CreateOIDCProvider:
+    Type: String
+    AllowedValues:
+    - 'true'
+    - 'false'
+    Default: 'true'
+    Description: Set false if the account already has the GitHub OIDC provider
+Conditions:
+  MakeOIDC:
+    Fn::Equals:
+    - Ref: CreateOIDCProvider
+    - 'true'
+Resources:
+  StateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName:
+        Fn::Sub: rde-tfstate-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: MakeOIDC
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+      - sts.amazonaws.com
+      ThumbprintList:
+      - 6938fd4d98bab03faadb97b34396831e3780aea1
+      - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: rde-github-deploy
+      Description: GitHub Actions deploy role for robot-data-engine (OIDC, no stored keys)
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Fn::Sub: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Federated": "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"}, "Action": "sts:AssumeRoleWithWebIdentity",
+          "Condition": {"StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"}, "StringLike": {"token.actions.githubusercontent.com:sub": ["repo:${GitHubRepo}:ref:refs/heads/main",
+          "repo:${GitHubRepo}:environment:dev", "repo:${GitHubRepo}:environment:prod", "repo:${GitHubRepo}:pull_request"]}}}]}'
+      Policies:
+      - PolicyName: rde-deploy
+        PolicyDocument:
+          Fn::Sub: '{"Version": "2012-10-17", "Statement": [{"Sid": "ReadOnlyDiscovery", "Effect": "Allow", "Action": ["sts:GetCallerIdentity", "s3:ListAllMyBuckets", "lambda:List*", "lambda:Get*", "glue:Get*",
+            "athena:Get*", "athena:List*", "states:Describe*", "states:List*", "scheduler:Get*", "scheduler:List*", "iam:Get*", "iam:List*", "logs:Describe*", "logs:List*", "cloudwatch:Describe*", "cloudwatch:List*",
+            "sns:Get*", "sns:List*", "budgets:View*", "budgets:Describe*"], "Resource": "*"}, {"Sid": "TerraformState", "Effect": "Allow", "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
+            "Resource": ["arn:aws:s3:::rde-tfstate-${AWS::AccountId}", "arn:aws:s3:::rde-tfstate-${AWS::AccountId}/*"]}, {"Sid": "ProjectBuckets", "Effect": "Allow", "Action": "s3:*", "Resource": ["arn:aws:s3:::rde-dev-*",
+            "arn:aws:s3:::rde-dev-*/*", "arn:aws:s3:::rde-prod-*", "arn:aws:s3:::rde-prod-*/*"]}, {"Sid": "ProjectLambdas", "Effect": "Allow", "Action": "lambda:*", "Resource": ["arn:aws:lambda:*:${AWS::AccountId}:function:rde-*",
+            "arn:aws:lambda:*:${AWS::AccountId}:layer:rde-*", "arn:aws:lambda:*:${AWS::AccountId}:layer:rde-*:*"]}, {"Sid": "ProjectGlue", "Effect": "Allow", "Action": "glue:*", "Resource": ["arn:aws:glue:*:${AWS::AccountId}:catalog",
+            "arn:aws:glue:*:${AWS::AccountId}:database/rde_*", "arn:aws:glue:*:${AWS::AccountId}:table/rde_*/*", "arn:aws:glue:*:${AWS::AccountId}:job/rde-*"]}, {"Sid": "ProjectAthenaStatesScheduler", "Effect":
+            "Allow", "Action": ["athena:*", "states:*", "scheduler:*"], "Resource": ["arn:aws:athena:*:${AWS::AccountId}:workgroup/rde-*", "arn:aws:states:*:${AWS::AccountId}:stateMachine:rde-*", "arn:aws:states:*:${AWS::AccountId}:execution:rde-*:*",
+            "arn:aws:scheduler:*:${AWS::AccountId}:schedule/default/rde-*"]}, {"Sid": "ProjectRoles", "Effect": "Allow", "Action": ["iam:CreateRole", "iam:DeleteRole", "iam:UpdateRole", "iam:UpdateAssumeRolePolicy",
+            "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:TagRole", "iam:UntagRole", "iam:PassRole"], "Resource": "arn:aws:iam::${AWS::AccountId}:role/rde-*"}, {"Sid": "ProjectMonitoring", "Effect":
+            "Allow", "Action": ["logs:*", "cloudwatch:*", "sns:*", "budgets:*"], "Resource": ["arn:aws:logs:*:${AWS::AccountId}:log-group:/aws/lambda/rde-*", "arn:aws:logs:*:${AWS::AccountId}:log-group:/aws/lambda/rde-*:*",
+            "arn:aws:cloudwatch:*:${AWS::AccountId}:alarm:rde-*", "arn:aws:sns:*:${AWS::AccountId}:rde-*", "arn:aws:budgets::${AWS::AccountId}:budget/rde-*"]}, {"Sid": "SmokeTestQueries", "Effect": "Allow",
+            "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:GetBucketLocation"], "Resource": ["arn:aws:s3:::rde-*", "arn:aws:s3:::rde-*/*"]}]}'
+Outputs:
+  AWSROLEARN:
+    Description: GitHub variable AWS_ROLE_ARN
+    Value:
+      Fn::GetAtt:
+      - DeployRole
+      - Arn
+  TFSTATEBUCKET:
+    Description: GitHub variable TF_STATE_BUCKET
+    Value:
+      Ref: StateBucket
+  AWSREGION:
+    Description: GitHub variable AWS_REGION
+    Value:
+      Ref: AWS::Region
