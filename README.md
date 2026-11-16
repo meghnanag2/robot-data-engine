@@ -20,13 +20,27 @@ EventBridge Scheduler / GitHub Actions
       Athena (SQL, time travel)       CloudWatch alarms -> SNS
 ```
 
+## Dashboard and API
+
+- **Dashboard (dev):** https://d16oog6749lx6d.cloudfront.net (static site on private S3 behind CloudFront).
+  Live metrics (success rate, run time, frames extracted, rows cleaned and quarantined, estimated Spark
+  cost), run history, per-run AI verdict, quarantine reasons, episode stats and a gallery of extracted frames.
+- **API:** API Gateway HTTP API + Lambda (`rde.handlers.api_handler`): `GET /metrics`, `GET /runs`,
+  `GET /runs/{id}`, `GET /runs/{id}/episodes`, `GET /runs/{id}/frames`, `POST /runs`.
+- **Run pipeline button:** `POST /runs` requires the admin key stored in SSM
+  (`aws ssm get-parameter --name /rde/dev/admin-key --with-decryption`), refuses while a run is in progress,
+  and allows at most 5 runs a day. Nothing runs on a schedule; idle cost is about $0.
+
+![Dashboard](docs/screenshots/17-dashboard-metrics.jpg)
+
 ## Repository layout
 
 | Path | What |
 | --- | --- |
 | `src/rde/` | The Python package: `config`, `observability`, `storage`, `sources`, `quality`, `services`, `spark`, `handlers` |
 | `jobs/glue/clean_job.py` | Thin Glue entry point; the `rde` package ships to Glue as a zip |
-| `infra/` | Terraform: storage, catalog, Lambdas (`modules/python_lambda`), Glue, Step Functions, IAM, alerts, budget |
+| `infra/` | Terraform: storage, catalog, Lambdas (`modules/python_lambda`), Glue, Step Functions, IAM, API, CloudFront site, alerts, budget |
+| `web/` | Dashboard (plain HTML/CSS/JS, no build step) |
 | `infra/envs/` | `dev.tfvars`, `prod.tfvars` |
 | `tests/` | Unit tests; `tests/spark/` runs the real Spark code locally when pyspark is installed |
 | `bootstrap/` | One-time AWS setup (state bucket, GitHub OIDC, deploy role) |

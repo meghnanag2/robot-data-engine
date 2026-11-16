@@ -46,7 +46,7 @@
         tile(`${s.succeeded} / ${s.runs}`, "runs succeeded"),
         tile(pct(s.success_rate), "success rate (finished runs)"),
         tile(secs(s.avg_success_duration_s), "avg successful run time"),
-        tile(mb(s.mb_ingested), "data ingested from Hugging Face"),
+        tile(mb(s.mb_ingested), "new data copied (reruns skip files already in S3)"),
         tile(fmt.format(s.frames_extracted), "video frames extracted"),
         tile(s.clean_rows_latest == null ? "–" : fmt.format(s.clean_rows_latest), "clean rows (latest run)"),
         tile(fmt.format(s.quarantined_total), "rows quarantined (all runs)"),
