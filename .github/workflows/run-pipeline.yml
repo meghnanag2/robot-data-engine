@@ -1,4 +1,4 @@
-# Start a pipeline run without opening the AWS console: a button in the Actions tab, plus nightly in dev.
+# Start a pipeline run without opening the AWS console: a button in the Actions tab. Runs only on demand.
 name: run-pipeline
 
 on:
@@ -14,8 +14,6 @@ on:
       max_videos:
         type: number
         default: 1
-  schedule:
-    - cron: "43 11 * * *"   # nightly dev run, 11:43 UTC
 
 permissions:
   contents: read

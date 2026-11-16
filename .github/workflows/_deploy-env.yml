@@ -41,3 +41,10 @@ jobs:
             -var="region=${{ vars.AWS_REGION }}"
       - name: Smoke test (runs the whole pipeline on 1 video)
         run: bash ../scripts/smoke_test.sh "$(terraform output -raw state_machine_arn)"
+      - name: API and dashboard check
+        run: |
+          API=$(terraform output -raw api_url); WEB=$(terraform output -raw dashboard_url)
+          curl -sf "$API/health" && curl -sf "$API/runs" > /dev/null && echo "API ok"
+          for i in $(seq 1 30); do curl -sf -o /dev/null "$WEB/" && break; sleep 20; done   # new CloudFront takes a few minutes
+          curl -sf -o /dev/null "$WEB/" && echo "Dashboard ok"
+          echo "### ${{ inputs.env }} dashboard: $WEB" >> "$GITHUB_STEP_SUMMARY"

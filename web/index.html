@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Robot Data Engine · Dashboard</title>
+  <meta name="description" content="Robot learning data pipeline on AWS: ingest, frame extraction, Spark cleaning to Iceberg, AI quality agent.">
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <div>
+        <h1>Robot Data Engine</h1>
+        <p class="sub">Robot demonstration data in, clean versioned training data out. Built on AWS with Spark, Iceberg and an AI quality agent.</p>
+      </div>
+      <div class="top-links">
+        <span id="env" class="badge"></span>
+        <a id="repo" class="btn" href="#" target="_blank" rel="noopener">View code on GitHub</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="flow" aria-label="Pipeline steps">
+      <div class="step"><b>1 · Ingest</b><span>Lambda copies LeRobot data from Hugging Face to S3</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>2 · Extract</b><span>Lambda + PyAV samples frames, scores blur, contrast, duplicates</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>3 · Clean</b><span>Glue Spark applies rules, quarantines bad rows with reasons</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>4 · Store</b><span>Apache Iceberg tables, versioned, queried with Athena</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>5 · Review</b><span>AI agent reviews every run and gives a verdict</span></div>
+    </section>
+
+    <div class="grid">
+      <section class="card runs">
+        <h2>Pipeline runs</h2>
+        <p class="hint">Runs are started on demand from GitHub Actions. Select one.</p>
+        <div id="runs" class="runs-list"><p class="muted">Loading runs…</p></div>
+      </section>
+
+      <section class="card detail">
+        <div id="detail"><p class="muted">Select a run to see its results.</p></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Extracted frames</h2>
+      <p class="hint">Clean frames from the selected run, with their quality scores. Images are served through short-lived private links.</p>
+      <div id="frames" class="frames"><p class="muted">Select a run.</p></div>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    Serverless on AWS: S3 · Lambda · Glue (Spark) · Iceberg · Athena · Step Functions · Bedrock · API Gateway · CloudFront.
+    Infrastructure as code with Terraform and CloudFormation, deployed by GitHub Actions.
+  </footer>
+</body>
+</html>
