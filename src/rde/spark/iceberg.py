@@ -24,6 +24,7 @@ class IcebergWriter:
         df = df.withColumn("dataset", F.lit(self.dataset)).withColumn("run_id", F.lit(self.run_id))
         target = self.name(table)
         if self.spark.catalog.tableExists(target):
+            df = align_to_table(df, self.spark.table(target).schema)
             self.spark.sql(f"ALTER TABLE {target} SET TBLPROPERTIES ('write.spark.accept-any-schema'='true')")
             df.writeTo(target).option("merge-schema", "true").overwritePartitions()
         else:
@@ -34,6 +35,19 @@ class IcebergWriter:
                 .tableProperty("write.spark.accept-any-schema", "true")
                 .create()
             )
+
+
+def align_to_table(df: DataFrame, table_schema) -> DataFrame:
+    """Order columns like the table (Iceberg checks order), fill missing ones with typed nulls,
+    and append columns the table does not have yet so schema evolution can add them."""
+    have = set(df.columns)
+    cols = [
+        F.col(f.name) if f.name in have else F.lit(None).cast(f.dataType).alias(f.name)
+        for f in table_schema.fields
+    ]
+    known = {f.name for f in table_schema.fields}
+    cols += [F.col(c) for c in df.columns if c not in known]
+    return df.select(*cols)
 
 
 def quarantine_rows(df: DataFrame, entity: str, id_col: str, reason_col: str = "reason") -> DataFrame:

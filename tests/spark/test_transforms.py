@@ -96,3 +96,14 @@ def test_reads_lerobot_nested_layout(spark, tmp_path):
     spark.createDataFrame([(1,), (2,)], "a long").coalesce(1).write.parquet(str(nested / "file-000"))
     df = spark.read.option("recursiveFileLookup", "true").parquet(str(tmp_path / "data"))
     assert df.count() == 2
+
+
+def test_align_to_table_orders_fills_and_appends(spark):
+    from rde.spark.iceberg import align_to_table
+
+    table = spark.createDataFrame([], "a string, b double, c long").schema
+    df = spark.createDataFrame([("x", 1.0, "new")], "a string, b double, z string").select("z", "b", "a")
+    out = align_to_table(df, table)
+    assert out.columns == ["a", "b", "c", "z"]
+    row = out.first()
+    assert (row.a, row.b, row.c, row.z) == ("x", 1.0, None, "new")
