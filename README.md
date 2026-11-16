@@ -73,4 +73,4 @@ lands in `quarantine` with a reason code. Thresholds live in `infra/variables.tf
 About $15 to $25 a month at demo scale, mostly Glue runs. Guardrails: AWS Budget alert, 30-minute Glue
 timeout, 10 GB Athena scan cap, 7-day expiry on Athena results, schedule off in dev.
 
-See `docs/runbook.md` for setup and operations.
+See `docs/runbook.md` for setup and operations, and `docs/BUILD_LOG.md` for how it was built, the issues found and fixed, and screenshots of every step.
