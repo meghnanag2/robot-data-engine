@@ -16,16 +16,22 @@ class IcebergWriter:
         return f"{CATALOG}.{self.database}.{table}"
 
     def write(self, df: DataFrame, table: str) -> None:
-        """First run creates the table; later runs replace only this run's partition."""
+        """First run creates the table; later runs replace only this run's partition.
+
+        Schema evolution: new columns in the data (e.g. a new quality metric) are added to the
+        table instead of failing the write. Dropped columns are kept as nulls, never removed.
+        """
         df = df.withColumn("dataset", F.lit(self.dataset)).withColumn("run_id", F.lit(self.run_id))
         target = self.name(table)
         if self.spark.catalog.tableExists(target):
-            df.writeTo(target).overwritePartitions()
+            self.spark.sql(f"ALTER TABLE {target} SET TBLPROPERTIES ('write.spark.accept-any-schema'='true')")
+            df.writeTo(target).option("merge-schema", "true").overwritePartitions()
         else:
             (
                 df.writeTo(target)
                 .partitionedBy("dataset", "run_id")
                 .tableProperty("format-version", "2")
+                .tableProperty("write.spark.accept-any-schema", "true")
                 .create()
             )
 
