@@ -23,8 +23,8 @@
     return node;
   }
 
-  async function get(path) {
-    const res = await fetch(`${api}${path}`);
+  async function get(path, opts = {}) {
+    const res = await fetch(`${api}${path}`, opts);
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
     return body;
@@ -32,6 +32,67 @@
 
   const when = (iso) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
   const reasonLabel = (r) => r.replace(/^episode_/, "episode: ").replace(/_/g, " ");
+
+  // ---------- metrics ----------
+  const mb = (n) => (n == null ? "–" : `${n} MB`);
+  const pct = (n) => (n == null ? "–" : `${Math.round(n * 100)}%`);
+  const secs = (n) => (n == null ? "–" : n >= 60 ? `${Math.floor(n / 60)}m ${Math.round(n % 60)}s` : `${Math.round(n)}s`);
+
+  async function loadMetrics() {
+    const kpis = $("kpis"), hist = $("history");
+    try {
+      const { summary: s, runs } = await get("/metrics");
+      kpis.replaceChildren(
+        tile(`${s.succeeded} / ${s.runs}`, "runs succeeded"),
+        tile(pct(s.success_rate), "success rate (finished runs)"),
+        tile(secs(s.avg_success_duration_s), "avg successful run time"),
+        tile(mb(s.mb_ingested), "data ingested from Hugging Face"),
+        tile(fmt.format(s.frames_extracted), "video frames extracted"),
+        tile(s.clean_rows_latest == null ? "–" : fmt.format(s.clean_rows_latest), "clean rows (latest run)"),
+        tile(fmt.format(s.quarantined_total), "rows quarantined (all runs)"),
+        tile(`$${(s.est_glue_cost_usd || 0).toFixed(2)}`, "est. Spark (Glue) cost, all runs"));
+      const ordered = [...runs].reverse();
+      const max = Math.max(1, ...ordered.map((r) => r.duration_s || 0));
+      hist.replaceChildren(...ordered.map((r) => el("div", {
+        class: `hbar ${r.status}`,
+        style: `height:${Math.max(6, (100 * (r.duration_s || max * 0.15)) / max)}%`,
+        title: `${when(r.started_at)} · ${r.status.toLowerCase()} · ${secs(r.duration_s)}` +
+          (r.verdict ? ` · AI verdict ${r.verdict}` : "") +
+          (r.est_glue_cost_usd != null ? ` · Glue ~$${r.est_glue_cost_usd.toFixed(3)}` : ""),
+      })));
+    } catch (e) {
+      kpis.replaceChildren(el("p", { class: "error" }, `Could not load metrics: ${e.message}`));
+    }
+  }
+
+  // ---------- run button (admin key kept in this browser tab only) ----------
+  $("run-btn").addEventListener("click", async () => {
+    const msg = $("run-msg"), btn = $("run-btn");
+    let key = sessionStorage.getItem("rdeAdminKey");
+    if (!key) {
+      key = window.prompt("Admin key (stored in AWS SSM: /rde/" + (cfg.env || "dev") + "/admin-key)");
+      if (!key) return;
+    }
+    btn.disabled = true; msg.textContent = "Starting…";
+    try {
+      await get("/runs", { method: "POST", headers: { "x-admin-key": key } });
+      sessionStorage.setItem("rdeAdminKey", key);
+      msg.textContent = "Run started. It takes about 4 minutes; this page refreshes automatically.";
+      poll();
+    } catch (e) {
+      if (/admin key/.test(e.message)) sessionStorage.removeItem("rdeAdminKey");
+      msg.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  let polling = null;
+  function poll() {
+    clearInterval(polling);
+    let n = 0;
+    polling = setInterval(() => { loadMetrics(); loadRuns(); if (++n >= 12) clearInterval(polling); }, 30000);
+  }
 
   // ---------- runs ----------
   let selected = null;
@@ -50,8 +111,8 @@
             el("span", { class: `chip ${r.verdict || "none"}` }, r.verdict ? `AI verdict: ${r.verdict}` : "no report")));
         box.append(btn);
       }
-      const first = runs.find((r) => r.has_report) || runs[0];
-      select(first);
+      const keep = selected && runs.find((r) => r.run_id === selected);
+      select(keep || runs.find((r) => r.has_report) || runs[0]);
     } catch (e) {
       box.replaceChildren(el("p", { class: "error" }, `Could not load runs: ${e.message}`));
     }
@@ -150,5 +211,6 @@
   }
 
   if (!api) { $("runs").replaceChildren(el("p", { class: "error" }, "API URL missing (config.js).")); return; }
+  loadMetrics();
   loadRuns();
 })();

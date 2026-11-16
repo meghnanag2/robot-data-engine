@@ -70,7 +70,7 @@ def test_report_404_and_bad_input_400():
     api = _api(s3)
     assert dispatch(api, "GET", "/runs/20261115T215018066Z", None)[0] == 404
     assert dispatch(api, "GET", "/runs/1';DROP TABLE x--", None)[0] == 400
-    assert dispatch(api, "POST", "/runs", None)[0] == 405
+    assert dispatch(api, "DELETE", "/runs", None)[0] == 405
     assert dispatch(api, "GET", "/nope", None)[0] == 404
 
 
@@ -103,3 +103,77 @@ def test_handler_shape(monkeypatch):
     out = api_handler.handler({"rawPath": "/health", "requestContext": {"http": {"method": "GET"}}}, None)
     assert out["statusCode"] == 200 and json.loads(out["body"]) == {"status": "ok"}
     assert isinstance(io.StringIO(out["body"]).read(), str)
+
+
+class RunSfn:
+    def __init__(self, statuses):
+        self.statuses, self.started = statuses, []
+
+    def list_executions(self, **kwargs):
+        now = datetime.now(UTC)
+        return {
+            "executions": [
+                {"executionArn": f"arn:x:{i}", "status": s, "startDate": now, "stopDate": now}
+                for i, s in enumerate(self.statuses)
+            ]
+        }
+
+    def describe_execution(self, **kwargs):
+        return {
+            "output": json.dumps(
+                {
+                    "run_id": "r1",
+                    "bytes_copied": 2_000_000,
+                    "extract_results": [{"frames": 10}],
+                    "clean": {"glue_run_id": "jr_1"},
+                }
+            )
+        }
+
+    def start_execution(self, **kwargs):
+        self.started.append(kwargs)
+        return {"executionArn": "arn:x:new", "startDate": datetime.now(UTC)}
+
+
+class FakeGlue:
+    def get_job_run(self, **kwargs):
+        return {"JobRun": {"DPUSeconds": 3600}}
+
+
+def _run_api(statuses, key="secret", max_runs=5):
+    return CatalogApi(
+        s3=None,
+        sfn=RunSfn(statuses),
+        athena_stats=FakeAthena(),
+        bucket="b",
+        state_machine_arn=ARN,
+        admin_key_loader=lambda: key,
+        max_runs_per_day=max_runs,
+    )
+
+
+def test_start_run_requires_admin_key_and_guards_cost():
+    api = _run_api([])
+    assert dispatch(api, "POST", "/runs", None, {"X-Admin-Key": "wrong"})[0] == 403
+    assert dispatch(api, "POST", "/runs", None, {})[0] == 403
+    assert dispatch(_run_api(["RUNNING"]), "POST", "/runs", None, {"x-admin-key": "secret"})[0] == 409
+    assert dispatch(_run_api(["SUCCEEDED"] * 5), "POST", "/runs", None, {"x-admin-key": "secret"})[0] == 429
+    status, body = dispatch(api, "POST", "/runs", None, {"x-admin-key": "secret"})
+    assert status == 202 and body["started"] and len(api.sfn.started) == 1
+
+
+def test_no_key_configured_means_nobody_can_start():
+    assert dispatch(_run_api([], key=""), "POST", "/runs", None, {"x-admin-key": ""})[0] == 403
+
+
+def test_metrics_aggregate_runs_and_estimate_cost():
+    api = _run_api(["SUCCEEDED", "FAILED"])
+    api.glue, api.s3 = FakeGlue(), None
+    api._report_index = lambda: {
+        "r1": {"verdict": "ok", "stats": {"clean_frames": 100, "quarantine_by_reason": {"a": 3}}}
+    }
+    status, body = dispatch(api, "GET", "/metrics", None)
+    s = body["summary"]
+    assert status == 200 and s["runs"] == 2 and s["success_rate"] == 0.5
+    assert s["mb_ingested"] == 4.0 and s["frames_extracted"] == 20 and s["est_glue_cost_usd"] == 0.88
+    assert body["runs"][0]["verdict"] == "ok"

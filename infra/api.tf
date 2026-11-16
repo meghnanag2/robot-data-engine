@@ -17,7 +17,24 @@ module "api" {
     GLUE_DATABASE     = aws_glue_catalog_database.db.name
     STATE_MACHINE_ARN = aws_sfn_state_machine.pipeline.arn
     DATASET           = var.dataset
+    GLUE_JOB_NAME     = aws_glue_job.clean.name
+    ADMIN_KEY_PARAM   = aws_ssm_parameter.admin_key.name
+    MAX_RUNS_PER_DAY  = tostring(var.max_runs_per_day)
   }
+}
+
+# Admin key for the dashboard's "Run pipeline" button: generated once, stored encrypted in SSM.
+# Read it with: aws ssm get-parameter --name /rde/<env>/admin-key --with-decryption
+resource "random_password" "admin_key" {
+  length  = 32
+  special = false
+}
+
+resource "aws_ssm_parameter" "admin_key" {
+  name        = "/rde/${var.env}/admin-key"
+  description = "Admin key for starting pipeline runs from the dashboard"
+  type        = "SecureString"
+  value       = random_password.admin_key.result
 }
 
 resource "aws_apigatewayv2_api" "http" {
@@ -25,8 +42,8 @@ resource "aws_apigatewayv2_api" "http" {
   protocol_type = "HTTP"
   cors_configuration {
     allow_origins = ["https://${aws_cloudfront_distribution.web.domain_name}"]
-    allow_methods = ["GET"]
-    allow_headers = ["content-type"]
+    allow_methods = ["GET", "POST"]
+    allow_headers = ["content-type", "x-admin-key"]
     max_age       = 3600
   }
 }
@@ -41,6 +58,12 @@ resource "aws_apigatewayv2_integration" "lambda" {
 resource "aws_apigatewayv2_route" "get_any" {
   api_id    = aws_apigatewayv2_api.http.id
   route_key = "GET /{proxy+}"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "start_run" {
+  api_id    = aws_apigatewayv2_api.http.id
+  route_key = "POST /runs"
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
 
@@ -74,7 +97,10 @@ resource "aws_iam_role_policy" "api" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      { Effect = "Allow", Action = ["states:ListExecutions"], Resource = aws_sfn_state_machine.pipeline.arn },
+      { Effect = "Allow", Action = ["states:ListExecutions", "states:StartExecution"], Resource = aws_sfn_state_machine.pipeline.arn },
+      { Effect = "Allow", Action = ["states:DescribeExecution"], Resource = "arn:aws:states:${var.region}:${data.aws_caller_identity.me.account_id}:execution:${aws_sfn_state_machine.pipeline.name}:*" },
+      { Effect = "Allow", Action = ["glue:GetJobRun"], Resource = aws_glue_job.clean.arn },
+      { Effect = "Allow", Action = ["ssm:GetParameter"], Resource = aws_ssm_parameter.admin_key.arn },
       { Effect = "Allow", Action = ["s3:GetObject"], Resource = [
         "${aws_s3_bucket.data.arn}/reports/*",
         "${aws_s3_bucket.data.arn}/processed/frames/*",

@@ -85,3 +85,9 @@ variable "max_reject_rate" {
   type        = number
   default     = 0.2
 }
+
+variable "max_runs_per_day" {
+  description = "Cost guardrail: runs the dashboard button may start per UTC day"
+  type        = number
+  default     = 5
+}

@@ -3,6 +3,7 @@ terraform {
   required_providers {
     aws     = { source = "hashicorp/aws", version = "~> 5.80" }
     archive = { source = "hashicorp/archive", version = "~> 2.6" }
+    random  = { source = "hashicorp/random", version = "~> 3.6" }
   }
   # bucket / key / region come from -backend-config in the deploy workflow
   backend "s3" {

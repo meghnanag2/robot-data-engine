@@ -36,6 +36,23 @@
       <div class="step"><b>5 · Review</b><span>AI agent reviews every run and gives a verdict</span></div>
     </section>
 
+    <section class="card">
+      <div class="row-between">
+        <div>
+          <h2>Pipeline metrics</h2>
+          <p class="hint">Across the last 20 runs, from Step Functions, Glue and the quality reports.</p>
+        </div>
+        <div class="run-control">
+          <button id="run-btn" class="btn primary">Run pipeline</button>
+          <div id="run-msg" class="hint"></div>
+        </div>
+      </div>
+      <div id="kpis" class="tiles kpis"><p class="muted">Loading metrics…</p></div>
+      <h2 class="sp">Run history</h2>
+      <p class="hint">Each bar is one run; height is how long it took. Green succeeded, red failed, purple running.</p>
+      <div id="history" class="history"></div>
+    </section>
+
     <div class="grid">
       <section class="card runs">
         <h2>Pipeline runs</h2>
