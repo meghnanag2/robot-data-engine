@@ -19,6 +19,10 @@ class CleaningRules:
     min_brightness: float = 15.0
     max_brightness: float = 245.0
     min_blur_score: float = 10.0
+    # Exposure rules need low contrast too: simulators (e.g. PushT) render on white backgrounds,
+    # so a bright frame with visible objects is fine. The first real run flagged 100% of PushT
+    # frames as overexposed under a brightness-only rule.
+    min_contrast: float = 10.0
 
     @classmethod
     def from_json(cls, raw: str | None) -> CleaningRules:
@@ -49,9 +53,10 @@ class Reason:
 
 def frame_reason(m: dict, rules: CleaningRules) -> str | None:
     """Image rules for one extracted frame (duplicate check needs the whole set, so it lives in Spark)."""
-    if m["brightness"] < rules.min_brightness:
+    low_contrast = m.get("contrast", 0.0) < rules.min_contrast
+    if m["brightness"] < rules.min_brightness and low_contrast:
         return Reason.TOO_DARK
-    if m["brightness"] > rules.max_brightness:
+    if m["brightness"] > rules.max_brightness and low_contrast:
         return Reason.OVEREXPOSED
     if m["blur_score"] < rules.min_blur_score:
         return Reason.BLURRY

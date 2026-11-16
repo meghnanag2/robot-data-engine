@@ -70,6 +70,7 @@ variable "cleaning_rules" {
     min_brightness     = 15
     max_brightness     = 245
     min_blur_score     = 10
+    min_contrast       = 10
   }
 }
 

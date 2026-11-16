@@ -34,3 +34,15 @@ def test_rules_from_json_ignores_unknown_keys():
     r = CleaningRules.from_json('{"z_max": 4, "not_a_rule": 1}')
     assert r.z_max == 4
     assert CleaningRules.from_json(r.to_json()) == r
+
+
+def test_bright_frame_with_detail_is_not_overexposed():
+    """PushT renders objects on a white background: bright but full of detail."""
+    rules = CleaningRules()
+    frame = np.full((64, 64, 3), 255, dtype=np.uint8)
+    frame[20:40, 20:40] = 0  # a dark object on white
+    m = frame_metrics(frame)
+    assert m["brightness"] > rules.max_brightness - 50 and m["contrast"] > rules.min_contrast
+    assert frame_reason(m, rules) is None
+    flat_white = frame_metrics(np.full((32, 32, 3), 255, dtype=np.uint8))
+    assert frame_reason(flat_white, rules) == Reason.OVEREXPOSED

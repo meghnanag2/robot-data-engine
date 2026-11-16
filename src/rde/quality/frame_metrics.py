@@ -15,6 +15,11 @@ def brightness(gray: np.ndarray) -> float:
     return float(gray.mean())
 
 
+def contrast(gray: np.ndarray) -> float:
+    """Pixel standard deviation; low means a flat frame (no visible detail)."""
+    return float(gray.std())
+
+
 def blur_score(gray: np.ndarray) -> float:
     """Variance of the Laplacian; low means blurry or flat."""
     if gray.shape[0] < 3 or gray.shape[1] < 3:
@@ -43,6 +48,7 @@ def frame_metrics(rgb: np.ndarray) -> dict:
         "height": int(rgb.shape[0]),
         "width": int(rgb.shape[1]),
         "brightness": round(brightness(gray), 3),
+        "contrast": round(contrast(gray), 3),
         "blur_score": round(blur_score(gray), 3),
         "ahash": average_hash(gray),
     }

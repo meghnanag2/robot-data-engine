@@ -53,13 +53,17 @@ def clean_frames(
     else:
         frames = frames.withColumn("episode_index", F.lit(None).cast("long"))
 
+    # frames extracted before the contrast metric existed count as low contrast
+    if "contrast" not in frames.columns:
+        frames = frames.withColumn("contrast", F.lit(0.0))
+    _low_contrast = F.col("contrast") < rules.min_contrast
     hash_rank = F.row_number().over(Window.partitionBy("source_video", "ahash").orderBy("timestamp_s"))
     frames = (
         frames.withColumn("_hash_rank", hash_rank)
         .withColumn(
             "reason",
-            F.when(F.col("brightness") < rules.min_brightness, Reason.TOO_DARK)
-            .when(F.col("brightness") > rules.max_brightness, Reason.OVEREXPOSED)
+            F.when(_low_contrast & (F.col("brightness") < rules.min_brightness), Reason.TOO_DARK)
+            .when(_low_contrast & (F.col("brightness") > rules.max_brightness), Reason.OVEREXPOSED)
             .when(F.col("blur_score") < rules.min_blur_score, Reason.BLURRY)
             .when(F.col("_hash_rank") > 1, Reason.NEAR_DUPLICATE)
             .when(F.col("episode_index").isNull(), Reason.NO_EPISODE_MATCH),

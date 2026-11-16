@@ -60,15 +60,17 @@ def test_frame_rules_and_episode_mapping(spark):
     )
     frames = spark.createDataFrame(
         [
-            ("v", "cam", 0, 0, 0.0, "s3://a", 120.0, 500.0, "aa"),
-            ("v", "cam", 0, 0, 1.0, "s3://b", 120.0, 500.0, "aa"),  # near duplicate
-            ("v", "cam", 0, 0, 2.0, "s3://c", 5.0, 500.0, "bb"),  # too dark
-            ("v", "cam", 0, 0, 3.0, "s3://d", 120.0, 1.0, "cc"),  # blurry
-            ("v", "cam", 0, 0, 9.0, "s3://e", 120.0, 500.0, "dd"),  # no episode
-            ("v", "cam", 0, 0, 2.5, "s3://f", 120.0, 500.0, "ee"),  # clean, episode 1
+            ("v", "cam", 0, 0, 0.0, "s3://a", 120.0, 40.0, 500.0, "aa"),
+            ("v", "cam", 0, 0, 1.0, "s3://b", 120.0, 40.0, 500.0, "aa"),  # near duplicate
+            ("v", "cam", 0, 0, 2.0, "s3://c", 5.0, 2.0, 500.0, "bb"),  # too dark: dark and flat
+            ("v", "cam", 0, 0, 3.0, "s3://d", 120.0, 40.0, 1.0, "cc"),  # blurry
+            ("v", "cam", 0, 0, 9.0, "s3://e", 120.0, 40.0, 500.0, "dd"),  # no episode
+            ("v", "cam", 0, 0, 2.5, "s3://f", 120.0, 40.0, 500.0, "ee"),  # clean, episode 1
+            ("v", "cam", 0, 0, 3.5, "s3://g", 250.0, 60.0, 500.0, "ff"),  # bright sim frame with detail
+            ("v", "cam", 0, 0, 3.8, "s3://h", 252.0, 1.0, 500.0, "gg"),  # bright and flat: overexposed
         ],
         "source_video string, camera string, chunk_index long, file_index long, timestamp_s double, "
-        "frame_s3 string, brightness double, blur_score double, ahash string",
+        "frame_s3 string, brightness double, contrast double, blur_score double, ahash string",
     )
 
     clean, rejected = clean_frames(frames, episode_time_ranges(meta), CleaningRules())
@@ -78,8 +80,13 @@ def test_frame_rules_and_episode_mapping(spark):
         "s3://c": "too_dark",
         "s3://d": "blurry",
         "s3://e": "no_episode_match",
+        "s3://h": "overexposed",
     }
-    assert {(r.frame_s3, r.episode_index) for r in clean.collect()} == {("s3://a", 0), ("s3://f", 1)}
+    assert {(r.frame_s3, r.episode_index) for r in clean.collect()} == {
+        ("s3://a", 0),
+        ("s3://f", 1),
+        ("s3://g", 1),
+    }
 
 
 def test_reads_lerobot_nested_layout(spark, tmp_path):
