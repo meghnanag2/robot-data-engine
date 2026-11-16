@@ -30,7 +30,8 @@
         "apigateway:GET",
         "cloudfront:Get*",
         "cloudfront:List*",
-        "cloudfront:Describe*"
+        "cloudfront:Describe*",
+        "ssm:DescribeParameters"
       ],
       "Resource": "*"
     },
@@ -178,6 +179,20 @@
         "arn:aws:cloudfront::ACCOUNT_ID:distribution/*",
         "arn:aws:cloudfront::ACCOUNT_ID:origin-access-control/*"
       ]
+    },
+    {
+      "Sid": "ProjectParams",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:PutParameter",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:DeleteParameter",
+        "ssm:AddTagsToResource",
+        "ssm:RemoveTagsFromResource",
+        "ssm:ListTagsForResource"
+      ],
+      "Resource": "arn:aws:ssm:*:ACCOUNT_ID:parameter/rde/*"
     }
   ]
 }
