@@ -1,76 +1,48 @@
 # Robot Data Engine
 
-A production-style data pipeline for robot learning data on AWS: it ingests LeRobot demonstrations from the
-Hugging Face Hub, extracts and scores video frames, cleans episodes and frames with Spark, writes versioned
-Apache Iceberg tables, and has an AI agent review data quality on every run. Everything is deployed by
-GitHub Actions through Terraform; nothing is created by hand in the console.
+Serverless AWS pipeline that turns raw robot demonstration data (LeRobot PushT, time series and video)
+into clean, versioned, training-ready Apache Iceberg tables, with a quality gate on every run and a live dashboard.
 
-## Architecture
-
-```
-EventBridge Scheduler / GitHub Actions
-            |
-      Step Functions  rde-<env>-pipeline
-            |
-  1. Ingest (Lambda)            Hugging Face  ->  s3://rde-<env>-<acct>/raw/
-  2. Extract (Lambda x4, PyAV)  raw/*.mp4     ->  processed/frames/*.jpg + frame_meta/*.jsonl
-  3. Clean (Glue 5.0 Spark)     raw + processed -> Iceberg: episode_frames, episodes, video_frames, quarantine
-  4. Quality agent (Lambda + Bedrock)  Athena stats -> verdict ok/warn/fail -> reports/ + SNS email
-            |
-      Athena (SQL, time travel)       CloudWatch alarms -> SNS
-```
-
-## Dashboard and API
-
-- **Dashboard (dev):** https://d16oog6749lx6d.cloudfront.net (static site on private S3 behind CloudFront).
-  Live metrics (success rate, run time, frames extracted, rows cleaned and quarantined, estimated Spark
-  cost), run history, per-run AI verdict, quarantine reasons, episode stats and a gallery of extracted frames.
-- **API:** API Gateway HTTP API + Lambda (`rde.handlers.api_handler`): `GET /metrics`, `GET /runs`,
-  `GET /runs/{id}`, `GET /runs/{id}/episodes`, `GET /runs/{id}/frames`, `POST /runs`.
-- **Run pipeline button:** `POST /runs` requires the admin key stored in SSM
-  (`aws ssm get-parameter --name /rde/dev/admin-key --with-decryption`), refuses while a run is in progress,
-  and allows at most 5 runs a day. Nothing runs on a schedule; idle cost is about $0.
+**Dashboard:** https://d16oog6749lx6d.cloudfront.net
 
 ![Dashboard](docs/screenshots/17-dashboard-metrics.jpg)
 
-## Repository layout
+## How it works
+
+```
+Step Functions (on demand)
+  1. Ingest   Lambda           Hugging Face -> S3 raw/
+  2. Extract  Lambda + PyAV    video -> frames + blur, brightness, contrast, duplicate scores
+  3. Clean    Glue (PySpark)   rules -> Iceberg tables; rejected rows -> quarantine with reason codes
+  4. Review   quality agent    verdict ok / warn / fail; a fail stops the run
+Athena queries the tables; API Gateway + Lambda serve the dashboard (S3 + CloudFront).
+```
+
+**Cleaning rules:** nulls, NaN, duplicate frames, out-of-range state, timestamp and frame gaps, too-short
+episodes; dark, overexposed, blurry and near-duplicate frames. Thresholds are in `infra/variables.tf`.
+
+## Results
+
+- 25,650 timesteps across 206 episodes cleaned
+- 2,565 frames extracted, 1,522 duplicates quarantined, 1,043 clean frames
+- About 4 minutes and $0.03 per run; near zero cost when idle (no schedules)
+
+## Stack
+
+S3, Lambda, Glue 5.0 (Spark), Apache Iceberg, Athena, Step Functions, API Gateway, CloudFront, CloudWatch,
+SNS. Infrastructure as code with Terraform and CloudFormation, deployed by GitHub Actions through OIDC
+(no stored AWS keys), one least-privilege IAM role per service, dev and prod with an approval gate.
+
+## Repository
 
 | Path | What |
 | --- | --- |
-| `src/rde/` | The Python package: `config`, `observability`, `storage`, `sources`, `quality`, `services`, `spark`, `handlers` |
-| `jobs/glue/clean_job.py` | Thin Glue entry point; the `rde` package ships to Glue as a zip |
-| `infra/` | Terraform: storage, catalog, Lambdas (`modules/python_lambda`), Glue, Step Functions, IAM, API, CloudFront site, alerts, budget |
-| `web/` | Dashboard (plain HTML/CSS/JS, no build step) |
-| `infra/envs/` | `dev.tfvars`, `prod.tfvars` |
-| `tests/` | Unit tests; `tests/spark/` runs the real Spark code locally when pyspark is installed |
-| `bootstrap/` | One-time AWS setup (state bucket, GitHub OIDC, deploy role) |
-| `.github/workflows/` | `ci.yml` (PR), `deploy.yml` (main -> dev -> prod), `run-pipeline.yml` (button + nightly) |
-| `sql/checks.sql` | Athena queries to inspect a run |
+| `src/rde/` | Python package: sources, storage, quality rules, services, Spark jobs, Lambda handlers |
+| `jobs/glue/` | Glue entry point |
+| `infra/` | Terraform |
+| `web/` | Dashboard |
+| `bootstrap/` | One-time AWS setup (CloudFormation) |
+| `tests/` | Unit and Spark tests |
 
-## Data cleaning rules
-
-Episodes: null or NaN values, duplicate frames, state values beyond 6 std devs, too-short episodes, frame-index
-gaps, timestamp gaps. Large action jumps are flagged, not dropped. Frames: too dark, overexposed, blurry
-(variance of Laplacian), near-duplicates (average hash), frames that map to no episode. Every rejected row
-lands in `quarantine` with a reason code. Thresholds live in `infra/variables.tf` (`cleaning_rules`).
-
-## Environments and deployment
-
-- Pull request: lint, unit tests, `terraform plan` for dev.
-- Merge to `main`: build once, deploy dev, smoke test (runs the pipeline), then prod after approval.
-- Each environment has its own bucket, database, roles and Terraform state.
-- GitHub logs in to AWS with OIDC; no AWS keys are stored anywhere.
-
-## Security
-
-- One IAM role per service, scoped to its own prefixes and resources.
-- The deploy role can only manage `rde-*` resources and can only be assumed by this repo.
-- Humans sign in through IAM Identity Center (SSO), not the root user.
-- The quality agent is read-only on data.
-
-## Cost
-
-About $15 to $25 a month at demo scale, mostly Glue runs. Guardrails: AWS Budget alert, 30-minute Glue
-timeout, 10 GB Athena scan cap, 7-day expiry on Athena results, schedule off in dev.
-
-See `docs/runbook.md` for setup and operations, and `docs/BUILD_LOG.md` for how it was built, the issues found and fixed, and screenshots of every step.
+See [docs/BUILD_LOG.md](docs/BUILD_LOG.md) for how it was built, issues fixed and screenshots, and
+[docs/runbook.md](docs/runbook.md) for setup and operations.
