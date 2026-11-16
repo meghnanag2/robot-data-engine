@@ -26,7 +26,11 @@
         "sns:List*",
         "budgets:View*",
         "budgets:Describe*",
-        "states:ValidateStateMachineDefinition"
+        "states:ValidateStateMachineDefinition",
+        "apigateway:GET",
+        "cloudfront:Get*",
+        "cloudfront:List*",
+        "cloudfront:Describe*"
       ],
       "Resource": "*"
     },
@@ -136,6 +140,43 @@
       "Resource": [
         "arn:aws:s3:::rde-*",
         "arn:aws:s3:::rde-*/*"
+      ]
+    },
+    {
+      "Sid": "ProjectApiAndWeb",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:POST",
+        "apigateway:PUT",
+        "apigateway:PATCH",
+        "apigateway:DELETE",
+        "apigateway:GET",
+        "apigateway:TagResource",
+        "apigateway:UntagResource"
+      ],
+      "Resource": [
+        "arn:aws:apigateway:*::/apis",
+        "arn:aws:apigateway:*::/apis/*",
+        "arn:aws:apigateway:*::/tags/*"
+      ]
+    },
+    {
+      "Sid": "ProjectCdn",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:UpdateDistribution",
+        "cloudfront:DeleteDistribution",
+        "cloudfront:TagResource",
+        "cloudfront:UntagResource",
+        "cloudfront:CreateOriginAccessControl",
+        "cloudfront:UpdateOriginAccessControl",
+        "cloudfront:DeleteOriginAccessControl",
+        "cloudfront:CreateInvalidation"
+      ],
+      "Resource": [
+        "arn:aws:cloudfront::ACCOUNT_ID:distribution/*",
+        "arn:aws:cloudfront::ACCOUNT_ID:origin-access-control/*"
       ]
     }
   ]
